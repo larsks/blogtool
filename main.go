@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,13 +14,44 @@ import (
 	"github.com/spf13/viper"
 )
 
-func getGitTopdir() (string, error) {
+func gitGetTopdir() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", err
 	}
 
 	return strings.TrimSuffix(string(out), "\n"), err
+}
+
+func gitCreateBranch(branch, start string) error {
+	if start == "" {
+		start = "master"
+	}
+
+	if err := exec.Command("git", "checkout", "-b", branch, start).Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gitAddFiles(files ...string) error {
+	args := []string{"add"}
+	args = append(args, files...)
+
+	if err := exec.Command("git", args...).Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gitCommit(message string) error {
+	if err := exec.Command("git", "commit", "-m", message).Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func readConfigFile() error {
@@ -30,7 +62,7 @@ func readConfigFile() error {
 
 	viper.SetConfigName(".blogtool")
 
-	if repodir, err := getGitTopdir(); err == nil {
+	if repodir, err := gitGetTopdir(); err == nil {
 		log.Debug().Str("repodir", repodir).Msgf("looking for config in repodir")
 		viper.AddConfigPath(repodir)
 	}
@@ -108,12 +140,40 @@ func NewCmdNew() *cobra.Command {
 			if slug == "" {
 				slug = post.Slug(maxlen)
 			}
+
+			use_git, err := cmd.Flags().GetBool("git")
+			if err != nil {
+				return err
+			}
+
 			if err := os.MkdirAll(slug, 0o777); err != nil {
 				return err
 			}
 
 			if err := post.WriteToFile(filepath.Join(slug, "index.md")); err != nil {
 				return err
+			}
+
+			if use_git {
+				start_branch, err := cmd.Flags().GetString("start-branch")
+				if err != nil {
+					return err
+				}
+
+				log.Debug().Str("slug", slug).Msgf("creating new branch")
+				if err := gitCreateBranch(fmt.Sprintf("draft/%s", slug), start_branch); err != nil {
+					return err
+				}
+
+				log.Debug().Str("slug", slug).Msgf("adding post")
+				if err := gitAddFiles(filepath.Join(slug, "index.md")); err != nil {
+					return err
+				}
+
+				log.Debug().Str("slug", slug).Msgf("committing changes")
+				if err := gitCommit(fmt.Sprintf("Add %s", slug)); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -124,8 +184,15 @@ func NewCmdNew() *cobra.Command {
 	cmd.Flags().StringSliceP("category", "c", nil, "Specify category for post")
 	cmd.Flags().StringP("date", "d", "", "Specify post date")
 	cmd.Flags().StringP("slug", "s", "", "Specify post slug")
-	cmd.Flags().Int("max-slug-len", 30, "Set maximum length of slug")
+	cmd.Flags().BoolP("git", "g", false, "Create new git branch for post")
+	cmd.Flags().StringP("start-branch", "b", "master", "Name of start branch")
 
+	cmd.Flags().Int("max-slug-len", 30, "Set maximum length of slug")
+	cmd.Flags().MarkHidden("max-slug-len") //nolint
+
+	if err := viper.BindPFlag("start-branch", cmd.Flags().Lookup("start-branch")); err != nil {
+		panic(err)
+	}
 	if err := viper.BindPFlag("max-slug-len", cmd.Flags().Lookup("max-slug-len")); err != nil {
 		panic(err)
 	}
