@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -40,9 +41,32 @@ func readConfigFile() error {
 	return nil
 }
 
+func dateFromFlags(cmd *cobra.Command, defaultIsToday bool) (string, error) {
+	dateIn, err := cmd.Flags().GetString("date")
+	if err != nil {
+		return "", err
+	}
+
+	var ts time.Time
+	if dateIn == "" {
+		if !defaultIsToday {
+			return "", nil
+		}
+
+		ts = time.Now()
+	} else if dateIn != "" {
+		ts, err = dateparse.ParseStrict(dateIn)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return ts.Format("2006-01-02"), nil
+}
+
 func NewCmdNew() *cobra.Command {
 	cmd := cobra.Command{
-		Use:  "new",
+		Use:  "new <title>",
 		Args: cobra.ExactValidArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			maxlen := viper.GetInt("max-slug-len")
@@ -57,7 +81,7 @@ func NewCmdNew() *cobra.Command {
 				return err
 			}
 
-			date, err := cmd.Flags().GetString("date")
+			date, err := dateFromFlags(cmd, true)
 			if err != nil {
 				return err
 			}
@@ -70,7 +94,14 @@ func NewCmdNew() *cobra.Command {
 					Date:       date,
 				},
 			}
-			slug := post.Slug(maxlen)
+
+			slug, err := cmd.Flags().GetString("slug")
+			if err != nil {
+				return err
+			}
+			if slug == "" {
+				slug = post.Slug(maxlen)
+			}
 			if err := os.MkdirAll(slug, 0o777); err != nil {
 				return err
 			}
@@ -94,23 +125,92 @@ func NewCmdNew() *cobra.Command {
 	return &cmd
 }
 
-func NewCmdParse() *cobra.Command {
+func uniqueValues(values []string) []string {
+	seen := make(map[string]bool)
+	var res []string
+
+	for _, value := range values {
+		if _, found := seen[value]; !found {
+			seen[value] = true
+			res = append(res, value)
+		}
+	}
+
+	return res
+}
+
+func NewCmdUpdate() *cobra.Command {
 	cmd := cobra.Command{
-		Use: "parse",
+		Use: "update <slug>",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			date, err := dateFromFlags(cmd, false)
+			if err != nil {
+				return err
+			}
+
+			appendValues, err := cmd.Flags().GetBool("append")
+			if err != nil {
+				return err
+			}
+
+			tags, err := cmd.Flags().GetStringSlice("tag")
+			if err != nil {
+				return err
+			}
+
+			categories, err := cmd.Flags().GetStringSlice("category")
+			if err != nil {
+				return err
+			}
+
 			for _, arg := range args {
-				post, err := ReadPostFromFile(arg)
+				postIndex := filepath.Join(arg, "index.md")
+				post, err := ReadPostFromFile(postIndex)
+
 				if err != nil {
 					return err
 				}
-				fmt.Printf("%+v\n", post)
 
-				post.WriteToFile(fmt.Sprintf("%s.out", arg))
+				if date != "" {
+					log.Info().Str("date", date).Msgf("Setting date")
+					post.Metadata.Date = date
+				}
+
+				if len(tags) > 0 {
+					log.Info().Msgf("Setting tags")
+					if appendValues {
+						post.Metadata.Tags = append(post.Metadata.Tags, tags...)
+					} else {
+						post.Metadata.Tags = tags
+					}
+
+					post.Metadata.Tags = uniqueValues(post.Metadata.Tags)
+				}
+
+				if len(categories) > 0 {
+					log.Info().Msgf("Setting categories")
+					if appendValues {
+						post.Metadata.Categories = append(post.Metadata.Categories, categories...)
+					} else {
+						post.Metadata.Tags = categories
+					}
+
+					post.Metadata.Categories = uniqueValues(post.Metadata.Categories)
+				}
+
+				if err := post.WriteToFile(postIndex); err != nil {
+					return err
+				}
 			}
 
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolP("append", "a", false, "Append tags/categories")
+	cmd.Flags().StringSliceP("tag", "t", nil, "Specify tags for post")
+	cmd.Flags().StringSliceP("category", "c", nil, "Specify category for post")
+	cmd.Flags().StringP("date", "d", "", "Specify post date")
 
 	return &cmd
 }
@@ -126,7 +226,7 @@ func NewCmdRoot() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(NewCmdNew())
-	cmd.AddCommand(NewCmdParse())
+	cmd.AddCommand(NewCmdUpdate())
 	return &cmd
 }
 
