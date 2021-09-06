@@ -47,12 +47,17 @@ func dateFromFlags(cmd *cobra.Command, defaultIsToday bool) (string, error) {
 		return "", err
 	}
 
-	var ts time.Time
 	if dateIn == "" {
 		if !defaultIsToday {
 			return "", nil
 		}
 
+		dateIn = "today"
+	}
+
+	var ts time.Time
+
+	if dateIn == "today" {
 		ts = time.Now()
 	} else if dateIn != "" {
 		ts, err = dateparse.ParseStrict(dateIn)
