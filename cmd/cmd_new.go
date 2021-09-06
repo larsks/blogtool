@@ -34,6 +34,7 @@ func NewCmdNew() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			log.Debug().Str("date", date).Msg("got date")
 
 			post := post.Post{
 				Metadata: post.Metadata{
@@ -51,12 +52,14 @@ func NewCmdNew() *cobra.Command {
 			if slug == "" {
 				slug = post.Slug(maxlen)
 			}
+			log.Debug().Str("slug", slug).Str("title", post.Title).Msg("got slug")
 
 			use_git, err := cmd.Flags().GetBool("git")
 			if err != nil {
 				return err
 			}
 
+			log.Info().Str("slug", slug).Str("title", post.Title).Msg("creating post")
 			if err := os.MkdirAll(slug, 0o777); err != nil {
 				return err
 			}

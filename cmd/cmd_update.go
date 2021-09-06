@@ -49,18 +49,19 @@ func NewCmdUpdate() *cobra.Command {
 			for _, arg := range args {
 				postIndex := filepath.Join(arg, "index.md")
 				post, err := post.ReadPostFromFile(postIndex)
+				plog := log.With().Str("slug", arg).Logger()
 
 				if err != nil {
 					return err
 				}
 
 				if date != "" {
-					log.Info().Str("date", date).Msgf("Setting date")
+					plog.Info().Str("date", date).Msg("Setting date")
 					post.Date = date
 				}
 
 				if len(tags) > 0 {
-					log.Info().Msgf("Setting tags")
+					plog.Info().Msg("Setting tags")
 					if appendValues {
 						post.Tags = append(post.Tags, tags...)
 					} else {
@@ -71,7 +72,7 @@ func NewCmdUpdate() *cobra.Command {
 				}
 
 				if len(categories) > 0 {
-					log.Info().Msgf("Setting categories")
+					plog.Info().Msg("Setting categories")
 					if appendValues {
 						post.Categories = append(post.Categories, categories...)
 					} else {
@@ -81,6 +82,7 @@ func NewCmdUpdate() *cobra.Command {
 					post.Categories = uniqueValues(post.Categories)
 				}
 
+				plog.Info().Msg("writing updated post")
 				if err := post.WriteToFile(postIndex); err != nil {
 					return err
 				}
