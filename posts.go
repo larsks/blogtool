@@ -39,14 +39,14 @@ func ReadPost(r io.Reader) (*Post, error) {
 		if firstline {
 			firstline = false
 
-			if bytes.Compare(line[:3], []byte("---")) == 0 {
+			if bytes.Equal(line[:3], []byte("---")) {
 				read_metadata = true
 				continue
 			}
 		}
 
 		if read_metadata {
-			if bytes.Compare(line[:3], []byte("---")) == 0 {
+			if bytes.Equal(line[:3], []byte("---")) {
 				read_metadata = false
 				if err := yaml.Unmarshal(mdbuf, &post.Metadata); err != nil {
 					return nil, err
@@ -93,7 +93,7 @@ func min(a, b int) int {
 
 func (post *Post) Slug(maxlen int) string {
 	slug := strings.Map(mogrifyTitle, strings.ToLower(post.Metadata.Title))
-	for strings.Index(slug, "--") >= 0 {
+	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
 
@@ -104,13 +104,22 @@ func (post *Post) Write(w io.Writer) error {
 	encoder := yaml.NewEncoder(w)
 	encoder.SetIndent(2)
 
-	w.Write([]byte("---\n"))
+	if _, err := w.Write([]byte("---\n")); err != nil {
+		return err
+	}
+
 	err := encoder.Encode(post.Metadata)
 	if err != nil {
 		return err
 	}
-	w.Write([]byte("---\n"))
-	w.Write(post.Content)
+	if _, err := w.Write([]byte("---\n")); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(post.Content); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -36,6 +36,7 @@ func readConfigFile() error {
 	}
 	viper.AddConfigPath(filepath.Join(homedir, ".config"))
 
+	//nolint:errcheck
 	viper.ReadInConfig()
 
 	return nil
@@ -125,7 +126,9 @@ func NewCmdNew() *cobra.Command {
 	cmd.Flags().StringP("slug", "s", "", "Specify post slug")
 	cmd.Flags().Int("max-slug-len", 30, "Set maximum length of slug")
 
-	viper.BindPFlag("max-slug-len", cmd.Flags().Lookup("max-slug-len"))
+	if err := viper.BindPFlag("max-slug-len", cmd.Flags().Lookup("max-slug-len")); err != nil {
+		panic(err)
+	}
 
 	return &cmd
 }
