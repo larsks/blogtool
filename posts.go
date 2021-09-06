@@ -20,8 +20,8 @@ type (
 	}
 
 	Post struct {
-		Metadata Metadata
-		Content  []byte
+		Metadata
+		Content []byte
 	}
 )
 

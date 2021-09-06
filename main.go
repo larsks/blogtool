@@ -178,29 +178,29 @@ func NewCmdUpdate() *cobra.Command {
 
 				if date != "" {
 					log.Info().Str("date", date).Msgf("Setting date")
-					post.Metadata.Date = date
+					post.Date = date
 				}
 
 				if len(tags) > 0 {
 					log.Info().Msgf("Setting tags")
 					if appendValues {
-						post.Metadata.Tags = append(post.Metadata.Tags, tags...)
+						post.Tags = append(post.Tags, tags...)
 					} else {
-						post.Metadata.Tags = tags
+						post.Tags = tags
 					}
 
-					post.Metadata.Tags = uniqueValues(post.Metadata.Tags)
+					post.Tags = uniqueValues(post.Tags)
 				}
 
 				if len(categories) > 0 {
 					log.Info().Msgf("Setting categories")
 					if appendValues {
-						post.Metadata.Categories = append(post.Metadata.Categories, categories...)
+						post.Categories = append(post.Categories, categories...)
 					} else {
-						post.Metadata.Tags = categories
+						post.Tags = categories
 					}
 
-					post.Metadata.Categories = uniqueValues(post.Metadata.Categories)
+					post.Categories = uniqueValues(post.Categories)
 				}
 
 				if err := post.WriteToFile(postIndex); err != nil {
